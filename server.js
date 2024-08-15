@@ -32,7 +32,7 @@ const depositCardNumber = '6219861045590980';
 const cardHolderName = 'میلاد پاویز';
 
 // آیدی تلگرام مدیر برای دریافت فیش واریز
-const adminChatId = '841548105'; // جایگزین با آیدی عددی تلگرام شما
+const adminChatId = 'YOUR_ADMIN_CHAT_ID'; // جایگزین با آیدی عددی تلگرام شما
 
 // ذخیره‌سازی اطلاعات کاربر
 const userData = {};
@@ -50,6 +50,11 @@ const states = {
   CONFIRMED: 'CONFIRMED'
 };
 
+// بررسی اعتبار شماره تلفن
+const isValidPhoneNumber = (phone) => {
+  return /^\d{11}$/.test(phone);
+};
+
 // پردازش /start
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
@@ -58,8 +63,33 @@ bot.onText(/\/start/, (msg) => {
     state: states.ASKING_NAME,
     reservationId: reservationId
   };
-  bot.sendMessage(chatId, "به ربات خوش آمدید! لطفاً نام خود را وارد کنید.");
+  showMainMenu(chatId);
 });
+
+// تابع شروع مجدد
+const resetUser = (chatId) => {
+  delete userStates[chatId];
+  delete userData[Object.keys(userData).find(id => userData[id].chatId === chatId)];
+  const reservationId = uuidv4();
+  userStates[chatId] = {
+    state: states.ASKING_NAME,
+    reservationId: reservationId
+  };
+  bot.sendMessage(chatId, "به ربات خوش آمدید! لطفاً نام خود را وارد کنید.");
+};
+
+// نمایش منوی اصلی
+const showMainMenu = (chatId) => {
+  const mainMenu = [
+    [{ text: "شروع مجدد", callback_data: 'restart' }],
+    [{ text: "راهنما", callback_data: 'help' }]
+  ];
+  bot.sendMessage(chatId, "لطفاً یکی از گزینه‌های زیر را انتخاب کنید:", {
+    reply_markup: {
+      inline_keyboard: mainMenu
+    }
+  });
+};
 
 // پردازش پیام‌های متنی
 bot.on('message', (msg) => {
@@ -71,14 +101,23 @@ bot.on('message', (msg) => {
 
   const { state, reservationId } = stateInfo;
 
+  if (text === "شروع مجدد") {
+    resetUser(chatId);
+    return;
+  }
+
   if (state === states.ASKING_NAME) {
-    userData[reservationId] = { name: text };
+    userData[reservationId] = { name: text, chatId: chatId };
     userStates[chatId].state = states.ASKING_PHONE;
     bot.sendMessage(chatId, "لطفاً شماره تلفن خود را وارد کنید.");
   } else if (state === states.ASKING_PHONE) {
-    userData[reservationId].phone = text;
-    userStates[chatId].state = states.ASKING_DAY;
-    sendDayButtons(chatId);
+    if (isValidPhoneNumber(text)) {
+      userData[reservationId].phone = text;
+      userStates[chatId].state = states.ASKING_DAY;
+      sendDayButtons(chatId);
+    } else {
+      bot.sendMessage(chatId, "شماره تلفن باید ۱۱ رقم باشد. لطفاً دوباره شماره تلفن خود را وارد کنید.");
+    }
   } else if (state === states.WAITING_FOR_PAYMENT_CONFIRMATION) {
     if (msg.photo) {
       bot.forwardMessage(adminChatId, chatId, msg.message_id);
@@ -98,7 +137,7 @@ const sendDayButtons = (chatId) => {
 
   bot.sendMessage(chatId, "لطفاً روز مورد نظر را انتخاب کنید:", {
     reply_markup: {
-      inline_keyboard: [dayButtons]
+      inline_keyboard: [...dayButtons.map(btn => [btn]), [{ text: "شروع مجدد", callback_data: 'restart' }]]
     }
   });
 };
@@ -121,7 +160,7 @@ const sendTimeButtons = (chatId, isStartTime, startTimeIndex = 0) => {
 
   bot.sendMessage(chatId, `لطفاً ${isStartTime ? 'زمان شروع' : 'زمان پایان'} را انتخاب کنید:`, {
     reply_markup: {
-      inline_keyboard: timeButtonsInRows
+      inline_keyboard: [...timeButtonsInRows, [{ text: "شروع مجدد", callback_data: 'restart' }]]
     }
   });
 };
@@ -130,6 +169,14 @@ const sendTimeButtons = (chatId, isStartTime, startTimeIndex = 0) => {
 bot.on('callback_query', (callbackQuery) => {
   const chatId = callbackQuery.message.chat.id;
   const callbackData = callbackQuery.data;
+
+  if (callbackData === 'restart') {
+    resetUser(chatId);
+    return;
+  } else if (callbackData === 'help') {
+    bot.sendMessage(chatId, "برای استفاده از ربات، لطفاً مراحل زیر را دنبال کنید:\n1. نام و شماره تلفن خود را وارد کنید.\n2. روز و زمان مورد نظر را انتخاب کنید.\n3. مبلغ بیعانه را به شماره کارت زیر واریز کنید.\n\nبرای شروع مجدد، دکمه 'شروع مجدد' را بزنید.");
+    return;
+  }
 
   const parts = callbackData.split('_');
   const type = parts[0];
@@ -162,41 +209,34 @@ bot.on('callback_query', (callbackQuery) => {
       bot.sendMessage(chatId, "لطفاً یک انتخاب معتبر برای زمان پایان انجام دهید.");
       return;
     }
-    const startTimeIndex = availableTimes.indexOf(userData[reservationId].startTime);
-    if (index <= startTimeIndex) {
-      bot.sendMessage(chatId, "زمان پایان باید بعد از زمان شروع باشد.");
+    const startTime = availableTimes.indexOf(userData[reservationId].startTime);
+    if (index <= startTime) {
+      bot.sendMessage(chatId, "زمان پایان باید بعد از زمان شروع باشد. لطفاً مجدداً انتخاب کنید.");
       return;
     }
     userData[reservationId] = { ...userData[reservationId], endTime: availableTimes[index] };
 
     // محاسبه هزینه
-    const startIndex = availableTimes.indexOf(userData[reservationId].startTime);
-    const endIndex = availableTimes.indexOf(userData[reservationId].endTime);
-    const totalMinutes = (endIndex - startIndex) * 30;
-    let totalAmount = 0;
+    const startTimeMinutes = availableTimes.indexOf(userData[reservationId].startTime) * 30;
+    const endTimeMinutes = availableTimes.indexOf(userData[reservationId].endTime) * 30;
+    const totalMinutes = endTimeMinutes - startTimeMinutes;
 
+    let totalAmount = 0;
     if (totalMinutes <= 60) {
       totalAmount = hourlyRate;
     } else {
       const hours = Math.floor(totalMinutes / 60);
-      const halfHours = (totalMinutes % 60) / 30;
-      totalAmount = hours * hourlyRate + halfHours * halfHourlyRate;
+      const minutes = totalMinutes % 60;
+      totalAmount = (hours * hourlyRate) + (minutes > 0 ? halfHourlyRate : 0);
     }
 
-    bot.sendMessage(chatId, `مبلغ کل: ${totalAmount.toLocaleString()} تومان\n\n` +
-      `لطفاً مبلغ بیعانه ${depositAmount.toLocaleString()} تومان به شماره کارت زیر واریز کنید:\n` +
-      `<code>${depositCardNumber}</code>\n` +
-      `به نام: ${cardHolderName}\n\n` +
-      `فیش واریز را ارسال کنید تا رزرو شما تایید شود.`,
-      { parse_mode: 'HTML' }
-    );
-
+    bot.sendMessage(chatId, `هزینه کل رزرو شما: ${totalAmount} تومان.\n\nمبلغ بیعانه: ${depositAmount} تومان\n\nلطفاً مبلغ بیعانه ${depositAmount} تومان را به شماره کارت زیر واریز کنید:\n\n${depositCardNumber}\nبه نام ${cardHolderName}\n\nپس از واریز، فیش واریز را ارسال کنید.`);
     userStates[chatId].state = states.WAITING_FOR_PAYMENT_CONFIRMATION;
   }
 });
 
-// راه‌اندازی سرور Express
+// راه‌اندازی سرور
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
-  console.log(`Your bot is listening on port ${port}`);
+  console.log(`Server is running on port ${port}`);
 });
