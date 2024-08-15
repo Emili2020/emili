@@ -345,10 +345,34 @@ const calculateTotalPrice = (startTime, endTime) => {
   const start = availableTimes.indexOf(startTime);
   const end = availableTimes.indexOf(endTime);
   if (start === -1 || end === -1 || start >= end) return 0;
-  const duration = (end - start) / 2; // هر نیم‌ساعت یک واحد
-  return (Math.ceil(duration) * hourlyRate);
+
+  // تبدیل زمان‌ها به دقیقه
+  const startMinutes = start * 30;
+  const endMinutes = end * 30;
+
+  // محاسبه مدت زمان استفاده به دقیقه
+  const durationMinutes = endMinutes - startMinutes;
+
+  // محاسبه هزینه
+  let totalPrice = 0;
+
+  if (durationMinutes <= 30) {
+    // هزینه برای 30 دقیقه یا کمتر
+    totalPrice = hourlyRate;
+  } else {
+    // هزینه برای ساعت اول
+    totalPrice = hourlyRate;
+
+    // هزینه برای نیم‌ساعت‌های بعدی
+    const additionalMinutes = durationMinutes - 30;
+    const additionalHalfHours = Math.ceil(additionalMinutes / 30);
+    totalPrice += additionalHalfHours * halfHourlyRate;
+  }
+
+  return totalPrice;
 };
 
 app.listen(process.env.PORT || 3000, () => {
   console.log('Server is running...');
 });
+
