@@ -28,7 +28,8 @@ const states = {
   ASKING_NAME: 'ASKING_NAME',
   ASKING_PHONE: 'ASKING_PHONE',
   ASKING_DAY: 'ASKING_DAY',
-  ASKING_TIME: 'ASKING_TIME'
+  ASKING_START_TIME: 'ASKING_START_TIME',
+  ASKING_END_TIME: 'ASKING_END_TIME'
 };
 
 // پردازش /start
@@ -81,16 +82,22 @@ const sendDayButtons = (chatId) => {
 };
 
 // ارسال دکمه‌های زمان
-const sendTimeButtons = (chatId) => {
+const sendTimeButtons = (chatId, isStartTime) => {
   const timeButtons = availableTimes.map((time, index) => ({
     text: time,
-    callback_data: `time_${index}`
+    callback_data: `${isStartTime ? 'start_' : 'end_'}${index}`
   }));
 
+  // تقسیم دکمه‌ها به چند ردیف برای نمایش بهتر
+  const timeButtonsInRows = [];
+  for (let i = 0; i < timeButtons.length; i += 2) {
+    timeButtonsInRows.push(timeButtons.slice(i, i + 2));
+  }
+
   console.log(`Sending time buttons to user: ${chatId}`);
-  bot.sendMessage(chatId, "لطفاً زمان مورد نظر را انتخاب کنید:", {
+  bot.sendMessage(chatId, `لطفاً ${isStartTime ? 'زمان شروع' : 'زمان پایان'} را انتخاب کنید:`, {
     reply_markup: {
-      inline_keyboard: [timeButtons]
+      inline_keyboard: timeButtonsInRows
     }
   });
 };
@@ -99,9 +106,12 @@ const sendTimeButtons = (chatId) => {
 bot.on('callback_query', (callbackQuery) => {
   const chatId = callbackQuery.message.chat.id;
   const callbackData = callbackQuery.data;
-  const [type, index] = callbackData.split('_').map(Number);
 
-  // برای بررسی مقادیر جدا شده و مطمئن شدن از درست بودن آنها
+  // تجزیه داده‌های callback_data
+  const parts = callbackData.split('_');
+  const type = parts[0];
+  const index = parseInt(parts[1], 10);
+
   console.log(`Callback data: ${callbackData}`);
   console.log(`Parsed type: ${type}, index: ${index}`);
 
@@ -117,23 +127,48 @@ bot.on('callback_query', (callbackQuery) => {
       return;
     }
     userData[reservationId].day = daysOfWeek[index];
-    userStates[chatId].state = states.ASKING_TIME;
-    sendTimeButtons(chatId);
-  } else if (type === 'time') {
+    console.log(`Reservation ${reservationId}: User ${chatId} selected day: ${daysOfWeek[index]}`);
+    userStates[chatId].state = states.ASKING_START_TIME;
+    sendTimeButtons(chatId, true);
+  } else if (type === 'start' || type === 'end') {
     if (isNaN(index) || index < 0 || index >= availableTimes.length) {
       bot.sendMessage(chatId, "لطفاً یک انتخاب معتبر برای زمان انجام دهید.");
       return;
     }
-    userData[reservationId].time = availableTimes[index];
-    const user = userData[reservationId];
-    bot.sendMessage(chatId, `رزرو شما با اطلاعات زیر تایید شد:\n\nنام: ${user.name}\nشماره تلفن: ${user.phone}\nروز: ${user.day}\nزمان: ${user.time}`);
-    
-    // پاک کردن داده‌های کاربر
-    delete userData[reservationId];
-    delete userStates[chatId];
+
+    const selectedTime = availableTimes[index];
+
+    if (type === 'start') {
+      userData[reservationId].startTime = selectedTime;
+      console.log(`Reservation ${reservationId}: User ${chatId} selected start time: ${selectedTime}`);
+      userStates[chatId].state = states.ASKING_END_TIME;
+      sendTimeButtons(chatId, false);
+    } else if (type === 'end') {
+      if (!userData[reservationId].startTime) {
+        bot.sendMessage(chatId, "لطفاً ابتدا زمان شروع را انتخاب کنید.");
+        return;
+      }
+      userData[reservationId].endTime = selectedTime;
+      console.log(`Reservation ${reservationId}: User ${chatId} selected end time: ${selectedTime}`);
+
+      // بررسی اعتبار بازه زمانی
+      const startIndex = availableTimes.indexOf(userData[reservationId].startTime);
+      const endIndex = availableTimes.indexOf(selectedTime);
+
+      if (endIndex <= startIndex) {
+        bot.sendMessage(chatId, "زمان پایان باید بعد از زمان شروع باشد. لطفاً زمان پایان را دوباره انتخاب کنید.");
+        return;
+      }
+
+      const user = userData[reservationId];
+      bot.sendMessage(chatId, `رزرو شما با اطلاعات زیر تایید شد:\n\nنام: ${user.name}\nشماره تلفن: ${user.phone}\nروز: ${user.day}\nزمان: ${user.startTime} تا ${user.endTime}`);
+
+      // پاک کردن داده‌های کاربر
+      delete userData[reservationId];
+      delete userStates[chatId];
+    }
   }
 });
-
 
 // سرویس نگهداری Glitch برای بیدار نگه داشتن برنامه
 app.get("/", (request, response) => {
