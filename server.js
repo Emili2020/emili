@@ -1,7 +1,6 @@
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
 const { v4: uuidv4 } = require('uuid');
-const PersianDate = require('persian-date'); // اضافه کردن کتابخانه persian-date
 require('dotenv').config(); // بارگذاری متغیرهای محیطی
 
 const token = process.env.TELEGRAM_TOKEN; // استفاده از توکن از فایل .env
@@ -22,34 +21,6 @@ const daysOfWeek = [
   "شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنج‌شنبه"
 ];
 
-// تابعی برای تبدیل تاریخ میلادی به شمسی
-const getShamsiDate = (date) => {
-  return new PersianDate(date).format('YYYY/MM/DD'); // تبدیل به تاریخ شمسی
-};
-
-// محاسبه روزهای هفته با تاریخ شمسی صحیح و حذف جمعه
-const getDaysWithDates = () => {
-  const today = new PersianDate(); // تاریخ امروز میلادی
-  const days = [];
-  
-  for (let i = 0; i < 7; i++) { // 7 روز به جلو
-    const dayDate = today.clone().add(i, 'days'); // روزهای آینده
-    const dayOfWeek = dayDate.day(); // شماره روز هفته (0 = شنبه، 1 = یکشنبه، ...)
-
-    // بررسی اینکه روز جمعه نباشد
-    if (dayOfWeek !== 5) {
-      days.push({
-        day: daysOfWeek[dayOfWeek], // روز هفته
-        date: getShamsiDate(dayDate) // تاریخ شمسی
-      });
-    }
-  }
-
-  return days;
-};
-
-const daysOfWeekWithDates = getDaysWithDates();
-
 // هزینه به ازای هر ساعت و نیم‌ساعت
 let hourlyRate = 500000;
 let halfHourlyRate = 250000;
@@ -62,7 +33,7 @@ const depositCardNumber = '6219861045590980';
 const cardHolderName = 'میلاد پاویز';
 
 // آیدی تلگرام مدیر برای دریافت فیش واریز
-const adminChatId = '@intage'; // جایگزین با آیدی عددی تلگرام شما
+const adminChatId = 'YOUR_ADMIN_CHAT_ID'; // جایگزین با chatId مدیر
 
 // ذخیره‌سازی اطلاعات کاربر
 const userData = {};
@@ -109,7 +80,7 @@ const resetUser = (chatId) => {
     state: states.ASKING_NAME,
     reservationId: reservationId
   };
-  bot.sendMessage(chatId, "به ربات رزرو تایم استودیو پاویز خوش امدید .");
+  bot.sendMessage(chatId, "به ربات رزرو تایم استودیو پاویز خوش آمدید.");
 };
 
 // نمایش منوی اصلی
@@ -149,6 +120,23 @@ const showUpdateCostMenu = (chatId) => {
 const showUpdateHoursMenu = (chatId) => {
   bot.sendMessage(chatId, "لطفاً ساعات کاری جدید را به صورت زیر وارد کنید (مثال: 14:00-21:00).");
   adminStates[chatId] = { state: states.UPDATE_HOURS };
+};
+
+// تابعی برای ارسال اطلاعات کاربر به مدیر
+const notifyAdmin = (reservationId) => {
+  const data = userData[reservationId];
+  if (!data) return;
+
+  const message = `
+  اطلاعات جدید ثبت‌شده:
+  نام: ${data.name}
+  شماره تلفن: ${data.phone}
+  روز: ${data.day}
+  زمان شروع: ${data.startTime}
+  زمان پایان: ${data.endTime}
+  `;
+
+  bot.sendMessage(adminChatId, message);
 };
 
 // پردازش پیام‌های متنی
@@ -225,7 +213,7 @@ bot.on('callback_query', (callbackQuery) => {
   } else if (data === 'restart') {
     resetUser(chatId);
   } else if (state === states.ASKING_DAY) {
-    const selectedDay = daysOfWeekWithDates.find(day => day.date === data);
+    const selectedDay = daysOfWeek.find(day => day === data);
     if (!selectedDay) {
       bot.sendMessage(chatId, "تاریخ معتبر نمی‌باشد. لطفاً یکی از تاریخ‌های پیشنهادی را انتخاب کنید.");
       return;
@@ -263,6 +251,9 @@ bot.on('callback_query', (callbackQuery) => {
         one_time_keyboard: true
       }
     });
+
+    // ارسال اطلاعات به مدیر
+    notifyAdmin(reservationId);
   }
 });
 
@@ -270,10 +261,10 @@ bot.on('callback_query', (callbackQuery) => {
 const getDaysButtons = () => {
   const rowSize = 3; // تعداد دکمه‌ها در هر ردیف
   const rows = [];
-  for (let i = 0; i < daysOfWeekWithDates.length; i += rowSize) {
-    rows.push(daysOfWeekWithDates.slice(i, i + rowSize).map(day => ({
-      text: `${day.day} (${day.date})`,
-      callback_data: day.date
+  for (let i = 0; i < daysOfWeek.length; i += rowSize) {
+    rows.push(daysOfWeek.slice(i, i + rowSize).map(day => ({
+      text: day,
+      callback_data: day
     })));
   }
   return rows;
