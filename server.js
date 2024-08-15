@@ -23,7 +23,6 @@ const daysOfWeek = [
 
 // هزینه به ازای هر ساعت و نیم‌ساعت
 let hourlyRate = 500000;
-let halfHourlyRate = 250000; // این مقدار دیگر استفاده نمی‌شود
 
 // مبلغ بیعانه
 const depositAmount = 500000;
@@ -302,9 +301,12 @@ bot.on('callback_query', (callbackQuery) => {
       if (action === 'confirm') {
         bot.sendMessage(userChatId, "پرداخت شما تأیید شد. تایم شما ثبت شد.");
         bot.sendMessage(adminChatId, "پرداخت تأیید شد و تایم ثبت شد.");
+
         // ثبت تایم برای کاربر
         // در اینجا می‌توانید تایم را ثبت کنید
 
+        // ارسال اطلاعات تایم به مدیر
+        bot.sendMessage(adminChatId, `رزرو جدید ثبت شد:\n\nنام: ${userData[reservationId].name}\nشماره تلفن: ${userData[reservationId].phone}\nروز: ${userData[reservationId].day}\nزمان شروع: ${userData[reservationId].startTime}\nزمان پایان: ${userData[reservationId].endTime}\n\nتایم شما با موفقیت ثبت شد.`);
       } else {
         bot.sendMessage(userChatId, "پرداخت شما رد شد. لطفاً فیش پرداختی را دوباره ارسال کنید.");
       }
