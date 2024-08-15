@@ -226,73 +226,38 @@ const sendTimeButtons = (chatId, isStartTime, startTimeIndex = 0) => {
   });
 };
 
-// پردازش درخواست‌های دکمه
+// پردازش رویدادهای دکمه‌های اینلاین
 bot.on('callback_query', (query) => {
   const chatId = query.message.chat.id;
   const callbackData = query.data;
-  const [type, index] = callbackData.split('_');
+  const [action, index] = callbackData.split('_');
+  const userState = userStates[chatId];
 
-  const stateInfo = userStates[chatId];
-  if (!stateInfo) return;
-
-  const { state, reservationId } = stateInfo;
-
-  if (type === 'restart') {
-    resetUser(chatId);
-    return;
-  }
-
-  if (state === states.ASKING_DAY) {
-    if (isNaN(index) || index < 0 || index >= daysOfWeek.length) {
-      bot.sendMessage(chatId, "لطفاً یک انتخاب معتبر برای روز انجام دهید.");
-      return;
-    }
-    userData[reservationId].day = daysOfWeek[index];
-    userStates[chatId].state = states.ASKING_START_TIME;
+  if (action === 'day') {
+    userData[userState.reservationId].day = daysOfWeekWithDates[index].day;
+    userState.state = states.ASKING_START_TIME;
     sendTimeButtons(chatId, true);
-  } else if (type.startsWith('start')) {
-    if (isNaN(index) || index < 0 || index >= availableTimes.length) {
-      bot.sendMessage(chatId, "لطفاً یک انتخاب معتبر برای زمان شروع انجام دهید.");
-      return;
-    }
-    userData[reservationId] = { ...userData[reservationId], startTime: availableTimes[index] };
-    userStates[chatId].state = states.ASKING_END_TIME;
+  } else if (action === 'start') {
+    userData[userState.reservationId].startTime = availableTimes[index];
+    userState.state = states.ASKING_END_TIME;
     sendTimeButtons(chatId, false, index);
-  } else if (type.startsWith('end')) {
-    if (isNaN(index) || index < 0 || index >= availableTimes.length) {
-      bot.sendMessage(chatId, "لطفاً یک انتخاب معتبر برای زمان پایان انجام دهید.");
-      return;
-    }
-    const startTimeIndex = availableTimes.indexOf(userData[reservationId].startTime);
-    if (index <= startTimeIndex) {
-      bot.sendMessage(chatId, "زمان پایان باید بعد از زمان شروع باشد. لطفاً مجدداً انتخاب کنید.");
-      return;
-    }
-    userData[reservationId] = { ...userData[reservationId], endTime: availableTimes[index] };
-
-    // محاسبه هزینه
-    const startIndex = availableTimes.indexOf(userData[reservationId].startTime);
-    const endIndex = availableTimes.indexOf(userData[reservationId].endTime);
-    const totalMinutes = (endIndex - startIndex) * 30;
-
-    let totalAmount = 0;
-    if (totalMinutes <= 60) {
-      totalAmount = hourlyRate;
-    } else {
-      const hours = Math.floor(totalMinutes / 60);
-      const minutes = totalMinutes % 60;
-      totalAmount = (hours * hourlyRate) + (minutes > 0 ? halfHourlyRate : 0);
-    }
-
-    bot.sendMessage(chatId, `هزینه کل رزرو شما: ${totalAmount} تومان.\n\nمبلغ بیعانه: ${depositAmount} تومان\n\nلطفاً مبلغ بیعانه ${depositAmount} تومان را به شماره کارت زیر واریز کنید:\n\n${depositCardNumber}\nبه نام ${cardHolderName}\n\nپس از واریز، فیش واریز را ارسال کنید.`);
-    userStates[chatId].state = states.WAITING_FOR_PAYMENT_CONFIRMATION;
-  } else if (type === 'settings') {
+  } else if (action === 'end') {
+    userData[userState.reservationId].endTime = availableTimes[index];
+    userState.state = states.WAITING_FOR_PAYMENT_CONFIRMATION;
+    bot.sendMessage(chatId, `رزرو با موفقیت ثبت شد.\n\nنام: ${userData[userState.reservationId].name}\nشماره تلفن: ${userData[userState.reservationId].phone}\nروز: ${userData[userState.reservationId].day}\nزمان شروع: ${userData[userState.reservationId].startTime}\nزمان پایان: ${userData[userState.reservationId].endTime}\n\nلطفاً فیش واریز بیعانه را ارسال کنید. مبلغ بیعانه: ${depositAmount} تومان\n\nشماره کارت: ${depositCardNumber}\nنام صاحب کارت: ${cardHolderName}`);
+  } else if (action === 'restart') {
+    resetUser(chatId);
+  } else if (action === 'settings') {
     showAdminSettingsMenu(chatId);
+  } else if (action === 'back_to_main') {
+    showMainMenu(chatId);
+  } else if (action === 'update_cost') {
+    showUpdateCostMenu(chatId);
+  } else if (action === 'update_hours') {
+    showUpdateHoursMenu(chatId);
   }
 });
 
-// راه‌اندازی سرور
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+app.listen(process.env.PORT || 3000, () => {
+  console.log('Server is running...');
 });
