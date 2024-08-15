@@ -7,16 +7,22 @@ const bot = new TelegramBot(token, { polling: true });
 
 const app = express();
 
-// زمان‌های قابل رزرو از 14:00 تا 21:00
+// زمان‌های قابل رزرو از 14:00 تا 21:00 با بازه‌های نیم‌ساعته
 const availableTimes = [
-  "14:00", "15:00", "16:00", "17:00",
-  "18:00", "19:00", "20:00", "21:00"
+  "14:00", "14:30", "15:00", "15:30",
+  "16:00", "16:30", "17:00", "17:30",
+  "18:00", "18:30", "19:00", "19:30",
+  "20:00", "20:30", "21:00"
 ];
 
 // روزهای هفته بدون جمعه
 const daysOfWeek = [
   "شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنج‌شنبه"
 ];
+
+// هزینه به ازای هر ساعت و نیم‌ساعت
+const hourlyRate = 500000;   // هزینه برای هر ساعت
+const halfHourlyRate = 250000; // هزینه برای هر نیم‌ساعت
 
 // ذخیره‌سازی اطلاعات کاربر
 const userData = {};
@@ -82,16 +88,22 @@ const sendDayButtons = (chatId) => {
 };
 
 // ارسال دکمه‌های زمان
-const sendTimeButtons = (chatId, isStartTime) => {
+const sendTimeButtons = (chatId, isStartTime, startTimeIndex = 0) => {
+  // انتخاب زمان‌ها برای شروع یا پایان
   const timeButtons = availableTimes.map((time, index) => ({
     text: time,
     callback_data: `${isStartTime ? 'start_' : 'end_'}${index}`
   }));
 
+  // اگر زمان شروع انتخاب شده باشد، فیلتر کردن زمان‌های پایان
+  const filteredTimeButtons = isStartTime
+    ? timeButtons
+    : timeButtons.filter((_, index) => index > startTimeIndex);
+
   // تقسیم دکمه‌ها به چند ردیف برای نمایش بهتر
   const timeButtonsInRows = [];
-  for (let i = 0; i < timeButtons.length; i += 2) {
-    timeButtonsInRows.push(timeButtons.slice(i, i + 2));
+  for (let i = 0; i < filteredTimeButtons.length; i += 2) {
+    timeButtonsInRows.push(filteredTimeButtons.slice(i, i + 2));
   }
 
   console.log(`Sending time buttons to user: ${chatId}`);
@@ -142,7 +154,8 @@ bot.on('callback_query', (callbackQuery) => {
       userData[reservationId].startTime = selectedTime;
       console.log(`Reservation ${reservationId}: User ${chatId} selected start time: ${selectedTime}`);
       userStates[chatId].state = states.ASKING_END_TIME;
-      sendTimeButtons(chatId, false);
+      // ارسال زمان‌های پایان، فیلتر شده برای نمایش فقط گزینه‌های معتبر
+      sendTimeButtons(chatId, false, index);
     } else if (type === 'end') {
       if (!userData[reservationId].startTime) {
         bot.sendMessage(chatId, "لطفاً ابتدا زمان شروع را انتخاب کنید.");
@@ -160,21 +173,24 @@ bot.on('callback_query', (callbackQuery) => {
         return;
       }
 
+      // محاسبه هزینه
+      const totalMinutes = (endIndex - startIndex) * 30; // تعداد دقایق کل
+      let totalCost = 0;
+
+      // هزینه برای ساعت اول
+      if (totalMinutes <= 60) {
+        totalCost = hourlyRate; // هزینه ثابت برای 60 دقیقه اول
+      } else {
+        // هزینه برای ساعت‌های بعدی
+        const additionalMinutes = totalMinutes - 60;
+        const additionalHalfHours = Math.ceil(additionalMinutes / 30); // تعداد نیم‌ساعت‌های اضافی
+        totalCost = hourlyRate + (additionalHalfHours * halfHourlyRate);
+      }
+
       const user = userData[reservationId];
-      bot.sendMessage(chatId, `رزرو شما با اطلاعات زیر تایید شد:\n\nنام: ${user.name}\nشماره تلفن: ${user.phone}\nروز: ${user.day}\nزمان: ${user.startTime} تا ${user.endTime}`);
+      bot.sendMessage(chatId, `رزرو شما با اطلاعات زیر تایید شد:\n\nنام: ${user.name}\nشماره تلفن: ${user.phone}\nروز: ${user.day}\nزمان: ${user.startTime} تا ${user.endTime}\nهزینه کل: ${totalCost.toLocaleString()} تومان`);
 
       // پاک کردن داده‌های کاربر
       delete userData[reservationId];
       delete userStates[chatId];
-    }
-  }
-});
-
-// سرویس نگهداری Glitch برای بیدار نگه داشتن برنامه
-app.get("/", (request, response) => {
-  response.sendStatus(200);
-});
-
-const listener = app.listen(process.env.PORT, () => {
-  console.log("Your bot is listening on port " + listener.address().port);
-});
+   
