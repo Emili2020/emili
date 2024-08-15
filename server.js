@@ -27,17 +27,22 @@ const getShamsiDate = (date) => {
   return new PersianDate(date).format('YYYY/MM/DD'); // تبدیل به تاریخ شمسی
 };
 
-// محاسبه روزهای هفته با تاریخ شمسی صحیح
+// محاسبه روزهای هفته با تاریخ شمسی صحیح و حذف جمعه
 const getDaysWithDates = () => {
   const today = new PersianDate(); // تاریخ امروز میلادی
   const days = [];
   
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 7; i++) { // 7 روز به جلو
     const dayDate = today.clone().add(i, 'days'); // روزهای آینده
-    days.push({
-      day: daysOfWeek[dayDate.day() % 7], // روز هفته
-      date: getShamsiDate(dayDate) // تاریخ شمسی
-    });
+    const dayOfWeek = dayDate.day(); // شماره روز هفته (0 = شنبه، 1 = یکشنبه، ...)
+
+    // بررسی اینکه روز جمعه نباشد
+    if (dayOfWeek !== 5) {
+      days.push({
+        day: daysOfWeek[dayOfWeek], // روز هفته
+        date: getShamsiDate(dayDate) // تاریخ شمسی
+      });
+    }
   }
 
   return days;
@@ -289,8 +294,8 @@ const calculateTotalPrice = (startTime, endTime) => {
   const start = availableTimes.indexOf(startTime);
   const end = availableTimes.indexOf(endTime);
   if (start === -1 || end === -1 || start >= end) return 0;
-  const hours = (end - start) / 2; // هر نیم‌ساعت یک واحد
-  return (Math.ceil(hours) * hourlyRate);
+  const duration = (end - start) / 2; // هر نیم‌ساعت یک واحد
+  return (Math.ceil(duration) * hourlyRate);
 };
 
 app.listen(process.env.PORT || 3000, () => {
