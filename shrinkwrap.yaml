@@ -1,7 +1,5 @@
 dependencies:
-  dotenv: 16.4.5
-  jalaali-js: 1.2.7
-  node-telegram-bot-api: 0.56.0
+  node-telegram-bot-api: 0.50.0
 packages:
   /ajv/6.12.6:
     dependencies:
@@ -203,12 +201,6 @@ packages:
       node: '>= 0.6'
     resolution:
       integrity: sha512-7emPTl6Dpo6JRXOXjLRxck+FlLRX5847cLKEn00PLAgc3g2hTZZgr+e4c2v6QpSmLeFP3n5yUo7ft6avBK/5jQ==
-  /dotenv/16.4.5:
-    dev: false
-    engines:
-      node: '>=12'
-    resolution:
-      integrity: sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg==
   /ecc-jsbn/0.1.2:
     dependencies:
       jsbn: 0.1.1
@@ -641,10 +633,6 @@ packages:
     dev: false
     resolution:
       integrity: sha512-Yljz7ffyPbrLpLngrMtZ7NduUgVvi6wG9RJ9IUcyCd59YQ911PBJphODUcbOVbqYfxe1wuYf/LJ8PauMRwsM/g==
-  /jalaali-js/1.2.7:
-    dev: false
-    resolution:
-      integrity: sha512-gE+YHWSbygYAoJa+Xg8LWxGILqFOxZSBQQw39ghel01fVFUxV7bjL0x1JFsHcLQ3uPjvn81HQMa+kxwyPWnxGQ==
   /jsbn/0.1.1:
     dev: false
     resolution:
@@ -701,7 +689,7 @@ packages:
     dev: false
     resolution:
       integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==
-  /node-telegram-bot-api/0.56.0:
+  /node-telegram-bot-api/0.50.0:
     dependencies:
       array.prototype.findindex: 2.2.3
       bl: 1.2.3
@@ -718,7 +706,7 @@ packages:
     engines:
       node: '>=0.12'
     resolution:
-      integrity: sha512-gKUlH/uUXdSJ++6y1Y16qEThZouecfl4twuPKe6V2BPFDDfom9j2QMlxfslPEjZPH2ZXlA1S/uoRCKtIjzuaLw==
+      integrity: sha512-wPGJYb8RDsy2jOaWk51NWjJq+kcFLjJ3xMTYcfjkdK4b81i7d/ptjzsnmVsA31XeO1ZDDm8TwtqSr7CQkVfDVw==
   /oauth-sign/0.9.0:
     dev: false
     resolution:
@@ -1126,6 +1114,4 @@ registry: 'https://registry.npmjs.org/'
 shrinkwrapMinorVersion: 9
 shrinkwrapVersion: 3
 specifiers:
-  dotenv: ^16.0.3
-  jalaali-js: ^1.1.0
-  node-telegram-bot-api: ^0.56.0
+  node-telegram-bot-api: ^0.50.0
