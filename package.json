@@ -10,7 +10,8 @@
     "express": "^4.17.1",
     "node-telegram-bot-api": "^0.57.0",
     "uuid": "^8.3.2",
-    "moment-jalaali": "^0.10.1"
+    "moment-jalaali": "^0.10.1",
+    "axios": "^1.0.0"
   },
   "engines": {
     "node": "14.x"
