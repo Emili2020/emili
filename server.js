@@ -39,6 +39,7 @@ const adminChatId = 'YOUR_ADMIN_CHAT_ID'; // جایگزین با chatId مدیر
 const userData = {};
 const userStates = {};
 const adminStates = {};
+const pendingPayments = {}; // برای نگهداری پرداخت‌های در انتظار تأیید مدیر
 
 // وضعیت‌های مختلف
 const states = {
@@ -52,7 +53,8 @@ const states = {
   CONFIRMED: 'CONFIRMED',
   SETTINGS: 'SETTINGS',
   UPDATE_COST: 'UPDATE_COST',
-  UPDATE_HOURS: 'UPDATE_HOURS'
+  UPDATE_HOURS: 'UPDATE_HOURS',
+  WAITING_FOR_ADMIN_CONFIRMATION: 'WAITING_FOR_ADMIN_CONFIRMATION'
 };
 
 // بررسی اعتبار شماره تلفن
@@ -213,12 +215,11 @@ bot.on('callback_query', (callbackQuery) => {
   } else if (data === 'restart') {
     resetUser(chatId);
   } else if (state === states.ASKING_DAY) {
-    const selectedDay = daysOfWeek.find(day => day === data);
-    if (!selectedDay) {
-      bot.sendMessage(chatId, "تاریخ معتبر نمی‌باشد. لطفاً یکی از تاریخ‌های پیشنهادی را انتخاب کنید.");
+    if (!daysOfWeek.includes(data)) {
+      bot.sendMessage(chatId, "روز معتبر نمی‌باشد. لطفاً یکی از روزهای پیشنهادی را انتخاب کنید.");
       return;
     }
-    userData[reservationId].day = selectedDay;
+    userData[reservationId].day = data;
     userStates[chatId].state = states.ASKING_START_TIME;
     bot.sendMessage(chatId, "لطفاً زمان شروع را انتخاب کنید:", {
       reply_markup: {
@@ -252,9 +253,68 @@ bot.on('callback_query', (callbackQuery) => {
       }
     });
 
+    // ذخیره‌سازی اطلاعات فیش پرداختی در حالت انتظار
+    pendingPayments[reservationId] = {
+      chatId: chatId,
+      state: states.WAITING_FOR_ADMIN_CONFIRMATION
+    };
+
     // ارسال اطلاعات به مدیر
     notifyAdmin(reservationId);
   }
+});
+
+// پردازش عکس‌های ارسالی (فیش پرداختی)
+bot.on('photo', (msg) => {
+  const chatId = msg.chat.id;
+  const photoId = msg.photo[msg.photo.length - 1].file_id;
+  const stateInfo = userStates[chatId];
+  const reservationId = Object.keys(pendingPayments).find(id => pendingPayments[id].chatId === chatId);
+
+  if (reservationId && stateInfo?.state === states.WAITING_FOR_PAYMENT_CONFIRMATION) {
+    // ارسال عکس فیش به مدیر
+    bot.sendPhoto(adminChatId, photoId, { caption: `فیش پرداختی از کاربر: ${chatId}` });
+
+    // تأیید فیش پرداختی از مدیر
+    bot.sendMessage(adminChatId, `آیا فیش پرداختی زیر را تأیید می‌کنید؟\n\n${msg.photo[msg.photo.length - 1].file_id}`, {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "تأیید", callback_data: `confirm_${reservationId}` }],
+          [{ text: "رد", callback_data: `reject_${reservationId}` }]
+        ]
+      }
+    });
+
+    bot.sendMessage(chatId, "فیش پرداختی شما به مدیر ارسال شد. لطفاً منتظر تأیید مدیر باشید.");
+  }
+});
+
+// پردازش تأیید فیش پرداختی
+bot.on('callback_query', (callbackQuery) => {
+  const chatId = callbackQuery.message.chat.id;
+  const data = callbackQuery.data;
+  const reservationId = data.split('_')[1];
+  const action = data.split('_')[0];
+
+  if (action === 'confirm' || action === 'reject') {
+    if (pendingPayments[reservationId]) {
+      const userChatId = pendingPayments[reservationId].chatId;
+
+      if (action === 'confirm') {
+        bot.sendMessage(userChatId, "پرداخت شما تأیید شد. تایم شما ثبت شد.");
+        bot.sendMessage(adminChatId, "پرداخت تأیید شد و تایم ثبت شد.");
+        // ثبت تایم برای کاربر
+        // در اینجا می‌توانید تایم را ثبت کنید
+
+      } else {
+        bot.sendMessage(userChatId, "پرداخت شما رد شد. لطفاً فیش پرداختی را دوباره ارسال کنید.");
+      }
+
+      delete pendingPayments[reservationId];
+    }
+  }
+
+  bot.answerCallbackQuery(callbackQuery.id);
 });
 
 // تابعی برای دریافت دکمه‌های روز (افقی)
