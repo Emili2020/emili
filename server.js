@@ -1,9 +1,10 @@
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
 const { v4: uuidv4 } = require('uuid');
-const moment = require('moment-jalaali'); // افزودن کتابخانه برای تاریخ شمسی
+const moment = require('moment-jalaali');
+require('dotenv').config(); // بارگذاری متغیرهای محیطی
 
-const token = process.env.TELEGRAM_TOKEN;
+const token = process.env.TELEGRAM_TOKEN; // استفاده از توکن از فایل .env
 const bot = new TelegramBot(token, { polling: true });
 
 const app = express();
@@ -22,7 +23,6 @@ const daysOfWeek = [
 ];
 
 const daysOfWeekWithDates = daysOfWeek.map(day => {
-  // برای هر روز از هفته، تاریخ شمسی را تولید می‌کنیم
   const today = moment().locale('fa').format('jYYYY/jMM/jDD');
   return { day, date: today };
 });
@@ -148,7 +148,6 @@ bot.on('message', (msg) => {
       delete adminStates[chatId];
       showAdminSettingsMenu(chatId);
     } else if (adminState.state === states.UPDATE_HOURS) {
-      // TODO: Update working hours logic if necessary
       bot.sendMessage(chatId, "ساعات کاری جدید ذخیره شد.");
       delete adminStates[chatId];
       showAdminSettingsMenu(chatId);
