@@ -10,7 +10,7 @@
     "express": "^4.18.2",
     "node-telegram-bot-api": "^0.56.0",
     "uuid": "^9.0.0",
-    "moment-jalaali": "^0.10.8",
+    "moment-jalaali": "^0.10.1",
     "dotenv": "^16.0.0"
   },
   "engines": {
