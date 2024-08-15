@@ -33,7 +33,7 @@ const depositCardNumber = '6219861045590980';
 const cardHolderName = 'میلاد پاویز';
 
 // آیدی تلگرام مدیر برای دریافت فیش واریز
-const adminChatId = '@intage'; // جایگزین با chatId مدیر
+const adminChatId = '841548105'; // جایگزین با chatId مدیر
 
 // ذخیره‌سازی اطلاعات کاربر
 const userData = {};
