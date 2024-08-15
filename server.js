@@ -39,6 +39,7 @@ const userData = {};
 const userStates = {};
 const adminStates = {};
 const pendingPayments = {}; // برای نگهداری پرداخت‌های در انتظار تأیید مدیر
+const bookings = {}; // برای ذخیره‌سازی رزروهای تأیید شده
 
 // وضعیت‌های مختلف
 const states = {
@@ -53,7 +54,8 @@ const states = {
   SETTINGS: 'SETTINGS',
   UPDATE_COST: 'UPDATE_COST',
   UPDATE_HOURS: 'UPDATE_HOURS',
-  WAITING_FOR_ADMIN_CONFIRMATION: 'WAITING_FOR_ADMIN_CONFIRMATION'
+  WAITING_FOR_ADMIN_CONFIRMATION: 'WAITING_FOR_ADMIN_CONFIRMATION',
+  VIEW_BOOKINGS: 'VIEW_BOOKINGS'
 };
 
 // بررسی اعتبار شماره تلفن
@@ -88,7 +90,8 @@ const resetUser = (chatId) => {
 const showMainMenu = (chatId) => {
   const mainMenu = [
     [{ text: "شروع مجدد", callback_data: 'restart' }],
-    [{ text: "تنظیمات", callback_data: 'settings' }]
+    [{ text: "تنظیمات", callback_data: 'settings' }],
+    [{ text: "نمایش رزروهای موجود", callback_data: 'view_bookings' }]
   ];
   bot.sendMessage(chatId, "لطفاً یکی از گزینه‌های زیر را انتخاب کنید:", {
     reply_markup: {
@@ -121,6 +124,16 @@ const showUpdateCostMenu = (chatId) => {
 const showUpdateHoursMenu = (chatId) => {
   bot.sendMessage(chatId, "لطفاً ساعات کاری جدید را به صورت زیر وارد کنید (مثال: 14:00-21:00).");
   adminStates[chatId] = { state: states.UPDATE_HOURS };
+};
+
+// نمایش رزروهای موجود
+const showAvailableBookings = (chatId) => {
+  const message = Object.keys(bookings).length === 0
+    ? "هیچ رزرو فعالی وجود ندارد."
+    : "رزروهای موجود:\n" + Object.values(bookings).map(b => 
+      `رزرو: ${b.name}\nروز: ${b.day}\nزمان شروع: ${b.startTime}\nزمان پایان: ${b.endTime}\n\n`
+    ).join('');
+  bot.sendMessage(chatId, message);
 };
 
 // تابعی برای ارسال اطلاعات کاربر به مدیر
@@ -199,182 +212,128 @@ bot.on('callback_query', (callbackQuery) => {
   const chatId = callbackQuery.message.chat.id;
   const data = callbackQuery.data;
   const stateInfo = userStates[chatId];
-  const state = stateInfo?.state;
-  const reservationId = stateInfo?.reservationId;
+  const adminState = adminStates[chatId];
 
-  if (data === 'settings') {
-    showAdminSettingsMenu(chatId);
-  } else if (data === 'update_cost') {
-    showUpdateCostMenu(chatId);
-  } else if (data === 'update_hours') {
-    showUpdateHoursMenu(chatId);
-  } else if (data === 'back_to_main') {
-    showMainMenu(chatId);
-  } else if (data === 'restart') {
-    resetUser(chatId);
-  } else if (state === states.ASKING_DAY) {
-    if (!daysOfWeek.includes(data)) {
-      bot.sendMessage(chatId, "روز معتبر نمی‌باشد. لطفاً یکی از روزهای پیشنهادی را انتخاب کنید.");
-      return;
+  if (adminState) {
+    if (data === 'update_cost') {
+      showUpdateCostMenu(chatId);
+    } else if (data === 'update_hours') {
+      showUpdateHoursMenu(chatId);
+    } else if (data === 'back_to_main') {
+      showMainMenu(chatId);
     }
-    userData[reservationId].day = data;
-    userStates[chatId].state = states.ASKING_START_TIME;
-    bot.sendMessage(chatId, "لطفاً زمان شروع را انتخاب کنید:", {
-      reply_markup: {
-        inline_keyboard: getTimesButtons()
-      }
-    });
-  } else if (state === states.ASKING_START_TIME) {
-    if (!availableTimes.includes(data)) {
-      bot.sendMessage(chatId, "زمان معتبر نمی‌باشد. لطفاً یکی از زمان‌های پیشنهادی را انتخاب کنید.");
-      return;
-    }
-    userData[reservationId].startTime = data;
-    userStates[chatId].state = states.ASKING_END_TIME;
-    bot.sendMessage(chatId, "لطفاً زمان پایان را انتخاب کنید:", {
-      reply_markup: {
-        inline_keyboard: getTimesButtons()
-      }
-    });
-  } else if (state === states.ASKING_END_TIME) {
-    if (!availableTimes.includes(data)) {
-      bot.sendMessage(chatId, "زمان پایان معتبر نمی‌باشد. لطفاً یکی از زمان‌های پیشنهادی را انتخاب کنید.");
-      return;
-    }
-    userData[reservationId].endTime = data;
-    userStates[chatId].state = states.WAITING_FOR_PAYMENT_CONFIRMATION;
-    bot.sendMessage(chatId, `مبلغ کل: ${calculateTotalPrice(userData[reservationId].startTime, userData[reservationId].endTime)} تومان\n\nلطفاً بیعانه ${depositAmount} تومان را به شماره کارت ${depositCardNumber} واریز کنید. پس از واریز، فیش پرداختی خود را ارسال کنید.`, {
-      reply_markup: {
-        keyboard: [[{ text: "ارسال فیش پرداختی", request_contact: true }]],
-        resize_keyboard: true,
-        one_time_keyboard: true
-      }
-    });
+    return;
+  }
 
-    // ذخیره‌سازی اطلاعات فیش پرداختی در حالت انتظار
-    pendingPayments[reservationId] = {
-      chatId: chatId,
-      state: states.WAITING_FOR_ADMIN_CONFIRMATION
-    };
+  if (stateInfo) {
+    const { state, reservationId } = stateInfo;
 
-    // ارسال اطلاعات به مدیر
-    notifyAdmin(reservationId);
+    if (state === states.ASKING_DAY) {
+      if (!daysOfWeek.includes(data)) {
+        bot.sendMessage(chatId, "لطفاً روز معتبر انتخاب کنید.");
+        return;
+      }
+      userData[reservationId].day = data;
+      userStates[chatId].state = states.ASKING_START_TIME;
+      bot.sendMessage(chatId, "لطفاً زمان شروع را انتخاب کنید:", {
+        reply_markup: {
+          inline_keyboard: getTimesButtons()
+        }
+      });
+    } else if (state === states.ASKING_START_TIME) {
+      if (!availableTimes.includes(data)) {
+        bot.sendMessage(chatId, "زمان شروع معتبر نمی‌باشد. لطفاً یکی از زمان‌های موجود را انتخاب کنید.");
+        return;
+      }
+      userData[reservationId].startTime = data;
+      userStates[chatId].state = states.ASKING_END_TIME;
+      bot.sendMessage(chatId, "لطفاً زمان پایان را انتخاب کنید:", {
+        reply_markup: {
+          inline_keyboard: getTimesButtons()
+        }
+      });
+    } else if (state === states.ASKING_END_TIME) {
+      if (!availableTimes.includes(data)) {
+        bot.sendMessage(chatId, "زمان پایان معتبر نمی‌باشد. لطفاً یکی از زمان‌های موجود را انتخاب کنید.");
+        return;
+      }
+      const startTimeIndex = availableTimes.indexOf(userData[reservationId].startTime);
+      const endTimeIndex = availableTimes.indexOf(data);
+
+      if (startTimeIndex >= endTimeIndex) {
+        bot.sendMessage(chatId, "زمان پایان باید بعد از زمان شروع باشد.");
+        return;
+      }
+
+      userData[reservationId].endTime = data;
+      userStates[chatId].state = states.WAITING_FOR_PAYMENT_CONFIRMATION;
+      bot.sendMessage(chatId, `لطفاً فیش پرداختی خود را ارسال کنید.\n\nمبلغ قابل پرداخت: ${hourlyRate * (endTimeIndex - startTimeIndex + 1)} تومان\nبیعانه: ${depositAmount} تومان\n\nشماره کارت: ${depositCardNumber}\nنام صاحب کارت: ${cardHolderName}`);
+      pendingPayments[reservationId] = { chatId, startTime: userData[reservationId].startTime, endTime: userData[reservationId].endTime, day: userData[reservationId].day };
+    } else if (state === states.WAITING_FOR_PAYMENT_CONFIRMATION) {
+      bot.sendMessage(chatId, "فیش پرداختی شما در حال بررسی است. لطفاً منتظر تأیید مدیر باشید.");
+    }
+  } else if (data === 'settings') {
+    if (chatId.toString() === adminChatId) {
+      showAdminSettingsMenu(chatId);
+    } else {
+      bot.sendMessage(chatId, "این گزینه فقط برای مدیران قابل استفاده است.");
+    }
+  } else if (data === 'view_bookings') {
+    showAvailableBookings(chatId);
   }
 });
 
-// پردازش عکس‌های ارسالی (فیش پرداختی)
+// پردازش فیش‌های پرداختی
 bot.on('photo', (msg) => {
   const chatId = msg.chat.id;
   const photoId = msg.photo[msg.photo.length - 1].file_id;
-  const stateInfo = userStates[chatId];
   const reservationId = Object.keys(pendingPayments).find(id => pendingPayments[id].chatId === chatId);
 
-  if (reservationId && stateInfo?.state === states.WAITING_FOR_PAYMENT_CONFIRMATION) {
-    // ارسال عکس فیش به مدیر
-    bot.sendPhoto(adminChatId, photoId, { caption: `فیش پرداختی از کاربر: ${chatId}` });
-
-    // تأیید فیش پرداختی از مدیر
-    bot.sendMessage(adminChatId, `آیا فیش پرداختی زیر را تأیید می‌کنید؟\n\n${msg.photo[msg.photo.length - 1].file_id}`, {
+  if (reservationId) {
+    bot.sendMessage(adminChatId, `فیش پرداختی جدید از کاربر:\n\nرزرو: ${userData[reservationId].name}\nروز: ${userData[reservationId].day}\nزمان شروع: ${userData[reservationId].startTime}\nزمان پایان: ${userData[reservationId].endTime}`, {
       reply_markup: {
-        inline_keyboard: [
-          [{ text: "تأیید", callback_data: `confirm_${reservationId}` }],
-          [{ text: "رد", callback_data: `reject_${reservationId}` }]
-        ]
+        inline_keyboard: [[{ text: "تأیید", callback_data: `confirm_${reservationId}` }]]
       }
     });
-
-    bot.sendMessage(chatId, "فیش پرداختی شما به مدیر ارسال شد. لطفاً منتظر تأیید مدیر باشید.");
+    bot.sendPhoto(adminChatId, photoId);
+    bot.sendMessage(chatId, "فیش پرداختی شما ارسال شد و در حال بررسی است.");
+    delete pendingPayments[reservationId];
   }
 });
 
-// پردازش تأیید فیش پرداختی
+// پردازش تأیید پرداخت توسط مدیر
 bot.on('callback_query', (callbackQuery) => {
   const chatId = callbackQuery.message.chat.id;
   const data = callbackQuery.data;
-  const reservationId = data.split('_')[1];
-  const action = data.split('_')[0];
 
-  if (action === 'confirm' || action === 'reject') {
-    if (pendingPayments[reservationId]) {
-      const userChatId = pendingPayments[reservationId].chatId;
-
-      if (action === 'confirm') {
-        bot.sendMessage(userChatId, "پرداخت شما تأیید شد. تایم شما ثبت شد.");
-        bot.sendMessage(adminChatId, "پرداخت تأیید شد و تایم ثبت شد.");
-
-        // ثبت تایم برای کاربر
-        // در اینجا می‌توانید تایم را ثبت کنید
-
-        // ارسال اطلاعات تایم به مدیر
-        bot.sendMessage(adminChatId, `رزرو جدید ثبت شد:\n\nنام: ${userData[reservationId].name}\nشماره تلفن: ${userData[reservationId].phone}\nروز: ${userData[reservationId].day}\nزمان شروع: ${userData[reservationId].startTime}\nزمان پایان: ${userData[reservationId].endTime}\n\nتایم شما با موفقیت ثبت شد.`);
-      } else {
-        bot.sendMessage(userChatId, "پرداخت شما رد شد. لطفاً فیش پرداختی را دوباره ارسال کنید.");
-      }
-
-      delete pendingPayments[reservationId];
+  if (data.startsWith('confirm_')) {
+    const reservationId = data.replace('confirm_', '');
+    const reservation = userData[reservationId];
+    
+    if (reservation) {
+      bookings[reservationId] = reservation;
+      bot.sendMessage(reservation.chatId, `رزرو شما با موفقیت تأیید شد!\n\nروز: ${reservation.day}\nزمان شروع: ${reservation.startTime}\nزمان پایان: ${reservation.endTime}`);
+      bot.sendMessage(adminChatId, `رزرو ${reservation.name} با موفقیت تأیید شد.`);
+      delete userData[reservationId];
     }
   }
-
-  bot.answerCallbackQuery(callbackQuery.id);
 });
 
-// تابعی برای دریافت دکمه‌های روز (افقی)
+// دکمه‌های کیبورد روزها
 const getDaysButtons = () => {
-  const rowSize = 3; // تعداد دکمه‌ها در هر ردیف
-  const rows = [];
-  for (let i = 0; i < daysOfWeek.length; i += rowSize) {
-    rows.push(daysOfWeek.slice(i, i + rowSize).map(day => ({
-      text: day,
-      callback_data: day
-    })));
-  }
-  return rows;
+  return daysOfWeek.map(day => [{ text: day, callback_data: day }]);
 };
 
-// تابعی برای دریافت دکمه‌های زمان (عمودی)
+// دکمه‌های کیبورد زمان‌ها
 const getTimesButtons = () => {
-  return availableTimes.map(time => ([
-    {
-      text: time,
-      callback_data: time
-    }
-  ]));
+  return availableTimes.map(time => [{ text: time, callback_data: time }]);
 };
 
-// تابعی برای محاسبه قیمت کل
-const calculateTotalPrice = (startTime, endTime) => {
-  const start = availableTimes.indexOf(startTime);
-  const end = availableTimes.indexOf(endTime);
-  if (start === -1 || end === -1 || start >= end) return 0;
+// راه‌اندازی سرور Express
+app.get('/', (req, res) => {
+  res.send('ربات تلگرام در حال اجراست.');
+});
 
-  // تبدیل زمان‌ها به دقیقه
-  const startMinutes = start * 30;
-  const endMinutes = end * 30;
-
-  // محاسبه مدت زمان استفاده به دقیقه
-  const durationMinutes = endMinutes - startMinutes;
-
-  // هزینه ساعت اول و هزینه برای دقایق اضافی
-  const hourlyRate = 500000; // هزینه برای ساعت اول
-  const additionalMinuteRate = 8333; // هزینه به ازای هر دقیقه اضافی
-
-  let totalPrice = 0;
-
-  if (durationMinutes <= 60) {
-    // هزینه برای 60 دقیقه یا کمتر
-    totalPrice = hourlyRate;
-  } else {
-    // هزینه برای ساعت اول
-    totalPrice = hourlyRate;
-
-    // هزینه برای دقایق اضافی
-    const additionalMinutes = durationMinutes - 60;
-    totalPrice += additionalMinutes * additionalMinuteRate;
-  }
-
-  return totalPrice;
-};
-
-app.listen(process.env.PORT || 3000, () => {
-  console.log('Server is running...');
+app.listen(3000, () => {
+  console.log('سرور در پورت 3000 در حال اجراست.');
 });
