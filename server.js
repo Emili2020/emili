@@ -1,10 +1,10 @@
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
 const { v4: uuidv4 } = require('uuid');
-const PersianDate = require('persian-date');
-require('dotenv').config();
+const PersianDate = require('persian-date'); // اضافه کردن کتابخانه persian-date
+require('dotenv').config(); // بارگذاری متغیرهای محیطی
 
-const token = process.env.TELEGRAM_TOKEN;
+const token = process.env.TELEGRAM_TOKEN; // استفاده از توکن از فایل .env
 const bot = new TelegramBot(token, { polling: true });
 
 const app = express();
@@ -24,19 +24,19 @@ const daysOfWeek = [
 
 // تابعی برای تبدیل تاریخ میلادی به شمسی
 const getShamsiDate = (date) => {
-  return new PersianDate(date).format('YYYY/MM/DD');
+  return new PersianDate(date).format('YYYY/MM/DD'); // تبدیل به تاریخ شمسی
 };
 
 // محاسبه روزهای هفته با تاریخ شمسی صحیح
 const getDaysWithDates = () => {
-  const today = new PersianDate();
+  const today = new PersianDate(); // تاریخ امروز میلادی
   const days = [];
   
   for (let i = 0; i < 6; i++) {
-    const dayDate = today.clone().add(i, 'days');
+    const dayDate = today.clone().add(i, 'days'); // روزهای آینده
     days.push({
-      day: daysOfWeek[dayDate.day() % 7],
-      date: getShamsiDate(dayDate)
+      day: daysOfWeek[dayDate.day() % 7], // روز هفته
+      date: getShamsiDate(dayDate) // تاریخ شمسی
     });
   }
 
@@ -54,6 +54,7 @@ const depositAmount = 500000;
 
 // شماره کارت برای واریز بیعانه
 const depositCardNumber = '6219861045590980';
+const cardHolderName = 'میلاد پاویز';
 
 // آیدی تلگرام مدیر برای دریافت فیش واریز
 const adminChatId = '@intage'; // جایگزین با آیدی عددی تلگرام شما
@@ -103,7 +104,7 @@ const resetUser = (chatId) => {
     state: states.ASKING_NAME,
     reservationId: reservationId
   };
-  bot.sendMessage(chatId, "به ربات رزرو تایم استودیو پاویز خوش آمدید.");
+  bot.sendMessage(chatId, "به ربات رزرو تایم استودیو پاویز خوش امدید .");
 };
 
 // نمایش منوی اصلی
@@ -197,8 +198,29 @@ bot.on('message', (msg) => {
         inline_keyboard: getDaysButtons()
       }
     });
+  }
+});
+
+// پردازش دکمه‌های کیبورد درون‌خطی
+bot.on('callback_query', (callbackQuery) => {
+  const chatId = callbackQuery.message.chat.id;
+  const data = callbackQuery.data;
+  const stateInfo = userStates[chatId];
+  const state = stateInfo?.state;
+  const reservationId = stateInfo?.reservationId;
+
+  if (data === 'settings') {
+    showAdminSettingsMenu(chatId);
+  } else if (data === 'update_cost') {
+    showUpdateCostMenu(chatId);
+  } else if (data === 'update_hours') {
+    showUpdateHoursMenu(chatId);
+  } else if (data === 'back_to_main') {
+    showMainMenu(chatId);
+  } else if (data === 'restart') {
+    resetUser(chatId);
   } else if (state === states.ASKING_DAY) {
-    const selectedDay = daysOfWeekWithDates.find(day => `${day.day} ${day.date}` === text);
+    const selectedDay = daysOfWeekWithDates.find(day => day.date === data);
     if (!selectedDay) {
       bot.sendMessage(chatId, "تاریخ معتبر نمی‌باشد. لطفاً یکی از تاریخ‌های پیشنهادی را انتخاب کنید.");
       return;
@@ -211,11 +233,11 @@ bot.on('message', (msg) => {
       }
     });
   } else if (state === states.ASKING_START_TIME) {
-    if (!availableTimes.includes(text)) {
+    if (!availableTimes.includes(data)) {
       bot.sendMessage(chatId, "زمان معتبر نمی‌باشد. لطفاً یکی از زمان‌های پیشنهادی را انتخاب کنید.");
       return;
     }
-    userData[reservationId].startTime = text;
+    userData[reservationId].startTime = data;
     userStates[chatId].state = states.ASKING_END_TIME;
     bot.sendMessage(chatId, "لطفاً زمان پایان را انتخاب کنید:", {
       reply_markup: {
@@ -223,11 +245,11 @@ bot.on('message', (msg) => {
       }
     });
   } else if (state === states.ASKING_END_TIME) {
-    if (!availableTimes.includes(text)) {
+    if (!availableTimes.includes(data)) {
       bot.sendMessage(chatId, "زمان پایان معتبر نمی‌باشد. لطفاً یکی از زمان‌های پیشنهادی را انتخاب کنید.");
       return;
     }
-    userData[reservationId].endTime = text;
+    userData[reservationId].endTime = data;
     userStates[chatId].state = states.WAITING_FOR_PAYMENT_CONFIRMATION;
     bot.sendMessage(chatId, `مبلغ کل: ${calculateTotalPrice(userData[reservationId].startTime, userData[reservationId].endTime)} تومان\n\nلطفاً بیعانه ${depositAmount} تومان را به شماره کارت ${depositCardNumber} واریز کنید. پس از واریز، فیش پرداختی خود را ارسال کنید.`, {
       reply_markup: {
@@ -236,68 +258,39 @@ bot.on('message', (msg) => {
         one_time_keyboard: true
       }
     });
-  } else if (state === states.CONFIRMED) {
-    bot.sendMessage(chatId, "رزرو شما تأیید شد.");
-    showMainMenu(chatId);
   }
 });
 
-// پردازش فیش پرداختی
-bot.on('contact', (msg) => {
-  const chatId = msg.chat.id;
-  const contact = msg.contact;
-
-  if (userStates[chatId] && userStates[chatId].state === states.WAITING_FOR_PAYMENT_CONFIRMATION) {
-    const phoneNumber = contact.phone_number;
-    bot.sendMessage(chatId, `فیش پرداختی با شماره تلفن ${phoneNumber} دریافت شد.\n\nشما می‌توانید با ارسال /start از ربات استفاده کنید.`);
-    userStates[chatId].state = states.CONFIRMED;
-    bot.sendMessage(adminChatId, `فیش پرداختی جدید با شماره تلفن ${phoneNumber} دریافت شد.`);
-    delete userStates[chatId];
-  }
-});
-
-// پردازش دکمه‌های تنظیمات
-bot.on('callback_query', (callbackQuery) => {
-  const chatId = callbackQuery.message.chat.id;
-  const data = callbackQuery.data;
-
-  if (data === 'settings') {
-    showAdminSettingsMenu(chatId);
-  } else if (data === 'update_cost') {
-    showUpdateCostMenu(chatId);
-  } else if (data === 'update_hours') {
-    showUpdateHoursMenu(chatId);
-  } else if (data === 'back_to_main') {
-    showMainMenu(chatId);
-  } else if (data === 'restart') {
-    resetUser(chatId);
-  }
-});
-
-// محاسبه مبلغ کل بر اساس زمان‌های شروع و پایان
-const calculateTotalPrice = (startTime, endTime) => {
-  const startHour = parseInt(startTime.split(':')[0], 10);
-  const endHour = parseInt(endTime.split(':')[0], 10);
-
-  const duration = endHour - startHour;
-  const totalPrice = duration * hourlyRate;
-  return totalPrice;
-};
-
-// ایجاد دکمه‌های روزهای هفته
+// تابعی برای دریافت دکمه‌های روز (افقی)
 const getDaysButtons = () => {
-  return daysOfWeekWithDates.map(day => ([{
-    text: `${day.day} ${day.date}`,
-    callback_data: day.date
-  }]));
+  const rowSize = 3; // تعداد دکمه‌ها در هر ردیف
+  const rows = [];
+  for (let i = 0; i < daysOfWeekWithDates.length; i += rowSize) {
+    rows.push(daysOfWeekWithDates.slice(i, i + rowSize).map(day => ({
+      text: `${day.day} (${day.date})`,
+      callback_data: day.date
+    })));
+  }
+  return rows;
 };
 
-// ایجاد دکمه‌های زمان‌ها
+// تابعی برای دریافت دکمه‌های زمان (عمودی)
 const getTimesButtons = () => {
-  return availableTimes.map(time => ([{
-    text: time,
-    callback_data: time
-  }]));
+  return availableTimes.map(time => ([
+    {
+      text: time,
+      callback_data: time
+    }
+  ]));
+};
+
+// تابعی برای محاسبه قیمت کل
+const calculateTotalPrice = (startTime, endTime) => {
+  const start = availableTimes.indexOf(startTime);
+  const end = availableTimes.indexOf(endTime);
+  if (start === -1 || end === -1 || start >= end) return 0;
+  const hours = (end - start) / 2; // هر نیم‌ساعت یک واحد
+  return (Math.ceil(hours) * hourlyRate);
 };
 
 app.listen(process.env.PORT || 3000, () => {
