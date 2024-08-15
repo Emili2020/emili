@@ -24,6 +24,10 @@ const daysOfWeek = [
 const hourlyRate = 500000;   // هزینه برای هر ساعت
 const halfHourlyRate = 250000; // هزینه برای هر نیم‌ساعت
 
+// شماره کارت برای واریز بیعانه
+const depositCardNumber = '6219861045590980';
+const cardHolderName = 'میلاد پاویز';
+
 // ذخیره‌سازی اطلاعات کاربر
 const userData = {};
 const userStates = {};
@@ -35,7 +39,8 @@ const states = {
   ASKING_PHONE: 'ASKING_PHONE',
   ASKING_DAY: 'ASKING_DAY',
   ASKING_START_TIME: 'ASKING_START_TIME',
-  ASKING_END_TIME: 'ASKING_END_TIME'
+  ASKING_END_TIME: 'ASKING_END_TIME',
+  ASKING_CARD_NUMBER: 'ASKING_CARD_NUMBER'
 };
 
 // پردازش /start
@@ -69,6 +74,12 @@ bot.on('message', (msg) => {
     console.log(`Reservation ${reservationId}: User ${chatId} provided phone: ${text}`);
     userStates[chatId].state = states.ASKING_DAY;
     sendDayButtons(chatId);
+  } else if (state === states.ASKING_CARD_NUMBER) {
+    // مرحله پایانی - دریافت شماره کارت
+    bot.sendMessage(chatId, `<b>شماره کارت برای واریز بیعانه:</b>\n<code>${depositCardNumber}</code>\n<b>به نام:</b> ${cardHolderName}`, { parse_mode: 'HTML' });
+    // پاک کردن داده‌های کاربر
+    delete userData[reservationId];
+    delete userStates[chatId];
   }
 });
 
@@ -181,16 +192,20 @@ bot.on('callback_query', (callbackQuery) => {
       if (totalMinutes <= 60) {
         totalCost = hourlyRate; // هزینه ثابت برای 60 دقیقه اول
       } else {
-        // هزینه برای ساعت‌های بعدی
-        const additionalMinutes = totalMinutes - 60;
-        const additionalHalfHours = Math.ceil(additionalMinutes / 30); // تعداد نیم‌ساعت‌های اضافی
-        totalCost = hourlyRate + (additionalHalfHours * halfHourlyRate);
+        totalCost = hourlyRate + Math.ceil((totalMinutes - 60) / 30) * halfHourlyRate;
       }
 
-      const user = userData[reservationId];
-      bot.sendMessage(chatId, `رزرو شما با اطلاعات زیر تایید شد:\n\nنام: ${user.name}\nشماره تلفن: ${user.phone}\nروز: ${user.day}\nزمان: ${user.startTime} تا ${user.endTime}\nهزینه کل: ${totalCost.toLocaleString()} تومان`);
+      // ارسال هزینه به کاربر
+      bot.sendMessage(chatId, `هزینه کل: ${totalCost.toLocaleString()} تومان\nلطفاً برای واریز بیعانه، مبلغ را به شماره کارت زیر واریز کنید:\nشماره کارت: <code>${depositCardNumber}</code>\nبه نام: ${cardHolderName}`, { parse_mode: 'HTML' });
 
-      // پاک کردن داده‌های کاربر
-      delete userData[reservationId];
-      delete userStates[chatId];
-   
+      // تغییر وضعیت به درخواست شماره کارت
+      userStates[chatId].state = states.ASKING_CARD_NUMBER;
+    }
+  }
+});
+
+// راه‌اندازی سرور
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Your bot is listening on port ${port}`);
+});
