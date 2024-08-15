@@ -25,6 +25,7 @@ const states = {
   NONE: 'NONE',
   ASKING_NAME: 'ASKING_NAME',
   ASKING_PHONE: 'ASKING_PHONE',
+  ASKING_DAY: 'ASKING_DAY',
   ASKING_TIME: 'ASKING_TIME'
 };
 
@@ -49,10 +50,12 @@ bot.on('message', (msg) => {
     bot.sendMessage(chatId, "لطفاً شماره تلفن خود را وارد کنید.");
   } else if (userStates[chatId] === states.ASKING_PHONE) {
     userData[chatId].phone = text;
-    userStates[chatId] = states.ASKING_TIME;
+    userStates[chatId] = states.ASKING_DAY;
     sendDayButtons(chatId);
+  } else if (userStates[chatId] === states.ASKING_DAY) {
+    // این بخش برای پردازش انتخاب روز از دکمه‌های Inline است و ممکن است نیازی به پردازش `message` نداشته باشد
   } else if (userStates[chatId] === states.ASKING_TIME) {
-    handleReservation(chatId, text);
+    // این بخش برای پردازش انتخاب زمان از دکمه‌های Inline است و ممکن است نیازی به پردازش `message` نداشته باشد
   }
 });
 
@@ -69,64 +72,41 @@ const sendDayButtons = (chatId) => {
   });
 };
 
-const handleReservation = (chatId, text) => {
-  const [type, ...args] = text.split('_');
+const sendTimeButtons = (chatId) => {
+  const timeButtons = availableTimes.map((time, index) => ({
+    text: time,
+    callback_data: `time_${index}`
+  }));
 
-  if (type === 'day') {
-    const selectedDayIndex = args[0];
-    const selectedDay = daysOfWeek[selectedDayIndex];
-
-    const timeButtons = availableTimes.map((time, index) => ({
-      text: time,
-      callback_data: `time_${selectedDay}_${index}`
-    }));
-
-    bot.sendMessage(chatId, `روز انتخاب شده: ${selectedDay}\nلطفاً زمان مورد نظر را انتخاب کنید:`, {
-      reply_markup: {
-        inline_keyboard: [timeButtons]
-      }
-    });
-
-  } else if (type === 'time') {
-    const [selectedDay, timeIndex] = args;
-    const selectedTime = availableTimes[timeIndex];
-    const user = userData[chatId];
-
-    bot.sendMessage(chatId, `رزرو شما با اطلاعات زیر تایید شد:\n\nنام: ${user.name}\nشماره تلفن: ${user.phone}\nروز: ${selectedDay}\nزمان: ${selectedTime}`);
-    
-    // پاک کردن داده‌های کاربر
-    delete userData[chatId];
-    delete userStates[chatId];
-  }
+  bot.sendMessage(chatId, "لطفاً زمان مورد نظر را انتخاب کنید:", {
+    reply_markup: {
+      inline_keyboard: [timeButtons]
+    }
+  });
 };
 
 // پردازش دکمه‌های Inline
 bot.on('callback_query', (callbackQuery) => {
   const chatId = callbackQuery.message.chat.id;
   const callbackData = callbackQuery.data;
-  const [type, ...args] = callbackData.split('_');
+  const [type, index] = callbackData.split('_').map(Number);
 
   if (type === 'day') {
-    const selectedDayIndex = args[0];
-    const selectedDay = daysOfWeek[selectedDayIndex];
-
-    const timeButtons = availableTimes.map((time, index) => ({
-      text: time,
-      callback_data: `time_${selectedDay}_${index}`
-    }));
-
-    bot.sendMessage(chatId, `روز انتخاب شده: ${selectedDay}\nلطفاً زمان مورد نظر را انتخاب کنید:`, {
-      reply_markup: {
-        inline_keyboard: [timeButtons]
-      }
-    });
-
+    if (index < 0 || index >= daysOfWeek.length) {
+      bot.sendMessage(chatId, "لطفاً یک انتخاب معتبر برای روز انجام دهید.");
+      return;
+    }
+    userData[chatId].day = daysOfWeek[index];
+    userStates[chatId] = states.ASKING_TIME;
+    sendTimeButtons(chatId);
   } else if (type === 'time') {
-    const [selectedDay, timeIndex] = args;
-    const selectedTime = availableTimes[timeIndex];
+    if (index < 0 || index >= availableTimes.length) {
+      bot.sendMessage(chatId, "لطفاً یک انتخاب معتبر برای زمان انجام دهید.");
+      return;
+    }
+    userData[chatId].time = availableTimes[index];
     const user = userData[chatId];
-
-    bot.sendMessage(chatId, `رزرو شما با اطلاعات زیر تایید شد:\n\nنام: ${user.name}\nشماره تلفن: ${user.phone}\nروز: ${selectedDay}\nزمان: ${selectedTime}`);
+    bot.sendMessage(chatId, `رزرو شما با اطلاعات زیر تایید شد:\n\nنام: ${user.name}\nشماره تلفن: ${user.phone}\nروز: ${user.day}\nزمان: ${user.time}`);
     
     // پاک کردن داده‌های کاربر
     delete userData[chatId];
@@ -142,3 +122,59 @@ app.get("/", (request, response) => {
 const listener = app.listen(process.env.PORT, () => {
   console.log("Your bot is listening on port " + listener.address().port);
 });
+
+bot.on('message', (msg) => {
+  const chatId = msg.chat.id;
+  const text = msg.text;
+
+  console.log(`Received message: ${text} from user: ${chatId}`); // لاگ ورودی‌های پیام
+
+  if (!userStates[chatId]) return;
+
+  if (userStates[chatId] === states.ASKING_NAME) {
+    userData[chatId] = { name: text };
+    console.log(`User ${chatId} provided name: ${text}`); // لاگ نام کاربر
+    userStates[chatId] = states.ASKING_PHONE;
+    bot.sendMessage(chatId, "لطفاً شماره تلفن خود را وارد کنید.");
+  } else if (userStates[chatId] === states.ASKING_PHONE) {
+    userData[chatId].phone = text;
+    console.log(`User ${chatId} provided phone: ${text}`); // لاگ شماره تلفن کاربر
+    userStates[chatId] = states.ASKING_DAY;
+    sendDayButtons(chatId);
+  }
+});
+
+bot.on('callback_query', (callbackQuery) => {
+  const chatId = callbackQuery.message.chat.id;
+  const callbackData = callbackQuery.data;
+  const [type, index] = callbackData.split('_').map(Number);
+
+  console.log(`Callback query received: ${callbackData} from user: ${chatId}`); // لاگ داده‌های callback
+
+  if (type === 'day') {
+    console.log(`User ${chatId} selected day index: ${index}`); // لاگ انتخاب روز
+
+    if (index < 0 || index >= daysOfWeek.length) {
+      bot.sendMessage(chatId, "لطفاً یک انتخاب معتبر برای روز انجام دهید.");
+      return;
+    }
+    userData[chatId].day = daysOfWeek[index];
+    userStates[chatId] = states.ASKING_TIME;
+    sendTimeButtons(chatId);
+  } else if (type === 'time') {
+    console.log(`User ${chatId} selected time index: ${index}`); // لاگ انتخاب زمان
+
+    if (index < 0 || index >= availableTimes.length) {
+      bot.sendMessage(chatId, "لطفاً یک انتخاب معتبر برای زمان انجام دهید.");
+      return;
+    }
+    userData[chatId].time = availableTimes[index];
+    const user = userData[chatId];
+    bot.sendMessage(chatId, `رزرو شما با اطلاعات زیر تایید شد:\n\nنام: ${user.name}\nشماره تلفن: ${user.phone}\nروز: ${user.day}\nزمان: ${user.time}`);
+    
+    // پاک کردن داده‌های کاربر
+    delete userData[chatId];
+    delete userStates[chatId];
+  }
+});
+
