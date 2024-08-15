@@ -1,7 +1,7 @@
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
 const { v4: uuidv4 } = require('uuid');
-const moment = require('moment-jalaali'); // افزودن کتابخانه برای تاریخ شمسی
+const moment = require('moment-jalaali'); // برای استفاده از تاریخ شمسی
 
 const token = process.env.TELEGRAM_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
@@ -16,19 +16,10 @@ const availableTimes = [
   "20:00", "20:30", "21:00"
 ];
 
-// روزهای هفته بدون جمعه و تبدیل به تاریخ شمسی
+// روزهای هفته بدون جمعه
 const daysOfWeek = [
   "شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنج‌شنبه"
 ];
-
-// تبدیل روزهای هفته به همراه تاریخ شمسی
-const getDaysWithDates = () => {
-  return daysOfWeek.map((day, index) => {
-    // فرض بر این است که روزهای هفته از امروز شروع می‌شود
-    const today = moment().startOf('week').add(index, 'days').format('jYYYY/jMM/jDD');
-    return { day, date: today };
-  });
-};
 
 // هزینه به ازای هر ساعت و نیم‌ساعت
 let hourlyRate = 500000;
@@ -77,7 +68,7 @@ bot.onText(/\/start/, (msg) => {
     state: states.ASKING_NAME,
     reservationId: reservationId
   };
-  bot.sendMessage(chatId, "به ربات خوش آمدید! لطفاً نام خود را وارد کنید.");
+  showMainMenu(chatId);
 });
 
 // تابع شروع مجدد
@@ -192,17 +183,19 @@ bot.on('message', (msg) => {
 
 // ارسال دکمه‌های روز
 const sendDayButtons = (chatId) => {
-  const daysWithDates = getDaysWithDates();
-  const dayButtons = daysWithDates.map((day, index) => ({
-    text: `${day.day} (${day.date})`,
-    callback_data: `day_${index}`
-  }));
+  const dayButtons = daysOfWeek.map((day, index) => {
+    const today = moment().format('jYYYY/jMM/jDD');
+    return {
+      text: `${day} (${today})`,
+      callback_data: `day_${index}`
+    };
+  });
 
   bot.sendMessage(chatId, "لطفاً روز مورد نظر را انتخاب کنید:", {
     reply_markup: {
       inline_keyboard: [
-        dayButtons.slice(0, 3).map(btn => [btn]),
-        dayButtons.slice(3).map(btn => [btn]),
+        ...dayButtons.slice(0, 3).map(btn => [btn]), // نمایش در دو ستون
+        ...dayButtons.slice(3, 6).map(btn => [btn]), // نمایش در دو ستون
         [{ text: "شروع مجدد", callback_data: 'restart' }]
       ]
     }
@@ -223,81 +216,95 @@ const sendTimeButtons = (chatId, isStartTime, startTimeIndex = 0) => {
   bot.sendMessage(chatId, `لطفاً زمان ${isStartTime ? 'شروع' : 'پایان'} را انتخاب کنید:`, {
     reply_markup: {
       inline_keyboard: [
-        filteredTimeButtons.slice(0, 4).map(btn => [btn]),
-        filteredTimeButtons.slice(4).map(btn => [btn]),
+        ...filteredTimeButtons.slice(0, 5).map(btn => [btn]), // نمایش در چند ردیف
         [{ text: "شروع مجدد", callback_data: 'restart' }]
       ]
     }
   });
 };
 
-// پردازش درخواست‌های دکمه
+// پردازش انتخاب‌های کاربر
 bot.on('callback_query', (query) => {
   const chatId = query.message.chat.id;
-  const callbackData = query.data;
-  const [type, index] = callbackData.split('_');
-
+  const data = query.data;
   const stateInfo = userStates[chatId];
-  if (!stateInfo) return;
 
-  const { state, reservationId } = stateInfo;
-
-  if (type === 'restart') {
+  if (data === 'restart') {
     resetUser(chatId);
     return;
   }
 
+  if (!stateInfo) return;
+
+  const { state, reservationId } = stateInfo;
+
   if (state === states.ASKING_DAY) {
-    if (isNaN(index) || index < 0 || index >= daysOfWeek.length) {
-      bot.sendMessage(chatId, "لطفاً یک انتخاب معتبر برای روز انجام دهید.");
-      return;
-    }
-    userData[reservationId].day = daysOfWeek[index];
+    const dayIndex = parseInt(data.split('_')[1], 10);
+    const selectedDay = daysOfWeek[dayIndex];
+    userData[reservationId].day = selectedDay;
     userStates[chatId].state = states.ASKING_START_TIME;
     sendTimeButtons(chatId, true);
-  } else if (type.startsWith('start')) {
-    if (isNaN(index) || index < 0 || index >= availableTimes.length) {
-      bot.sendMessage(chatId, "لطفاً یک انتخاب معتبر برای زمان شروع انجام دهید.");
-      return;
-    }
-    userData[reservationId] = { ...userData[reservationId], startTime: availableTimes[index] };
+  } else if (state === states.ASKING_START_TIME) {
+    const startTimeIndex = parseInt(data.split('_')[1], 10);
+    const startTime = availableTimes[startTimeIndex];
+    userData[reservationId].startTime = startTime;
     userStates[chatId].state = states.ASKING_END_TIME;
-    sendTimeButtons(chatId, false, index);
-  } else if (type.startsWith('end')) {
-    if (isNaN(index) || index < 0 || index >= availableTimes.length) {
-      bot.sendMessage(chatId, "لطفاً یک انتخاب معتبر برای زمان پایان انجام دهید.");
+    sendTimeButtons(chatId, false, startTimeIndex);
+  } else if (state === states.ASKING_END_TIME) {
+    const endTimeIndex = parseInt(data.split('_')[1], 10);
+    const endTime = availableTimes[endTimeIndex];
+    const startTime = userData[reservationId].startTime;
+
+    if (availableTimes.indexOf(endTime) <= availableTimes.indexOf(startTime)) {
+      bot.sendMessage(chatId, "زمان پایان باید بعد از زمان شروع باشد. لطفاً زمان پایان را دوباره انتخاب کنید.");
       return;
     }
-    const startTimeIndex = availableTimes.indexOf(userData[reservationId].startTime);
-    if (index <= startTimeIndex) {
-      bot.sendMessage(chatId, "زمان پایان باید بعد از زمان شروع باشد. لطفاً مجدداً انتخاب کنید.");
-      return;
-    }
-    userData[reservationId] = { ...userData[reservationId], endTime: availableTimes[index] };
 
-    // محاسبه هزینه
-    const startIndex = availableTimes.indexOf(userData[reservationId].startTime);
-    const endIndex = availableTimes.indexOf(userData[reservationId].endTime);
-    const totalMinutes = (endIndex - startIndex) * 30;
-
-    let totalAmount = 0;
-    if (totalMinutes <= 60) {
-      totalAmount = hourlyRate;
-    } else {
-      const hours = Math.floor(totalMinutes / 60);
-      const minutes = totalMinutes % 60;
-      totalAmount = (hours * hourlyRate) + (minutes > 0 ? halfHourlyRate : 0);
-    }
-
-    bot.sendMessage(chatId, `هزینه کل رزرو شما: ${totalAmount} تومان.\n\nمبلغ بیعانه: ${depositAmount} تومان\n\nلطفاً مبلغ بیعانه ${depositAmount} تومان را به شماره کارت زیر واریز کنید:\n\n${depositCardNumber}\nبه نام ${cardHolderName}\n\nپس از واریز، فیش واریز را ارسال کنید.`);
+    userData[reservationId].endTime = endTime;
     userStates[chatId].state = states.WAITING_FOR_PAYMENT_CONFIRMATION;
-  } else if (type === 'settings') {
-    showAdminSettingsMenu(chatId);
+
+    bot.sendMessage(chatId, `رزرو شما با موفقیت ثبت شد.\n\nنام: ${userData[reservationId].name}\nشماره تلفن: ${userData[reservationId].phone}\nروز: ${userData[reservationId].day}\nزمان شروع: ${startTime}\nزمان پایان: ${endTime}\n\nمبلغ قابل پرداخت: ${calculateTotalCost(startTime, endTime)} تومان\n\nلطفاً فیش واریز را ارسال کنید.`);
   }
 });
 
-// راه‌اندازی سرور
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+// محاسبه مبلغ کل
+const calculateTotalCost = (startTime, endTime) => {
+  const startIndex = availableTimes.indexOf(startTime);
+  const endIndex = availableTimes.indexOf(endTime);
+  const duration = endIndex - startIndex;
+  return (duration * halfHourlyRate);
+};
+
+// پردازش پیام‌های فیش واریز
+bot.on('photo', (msg) => {
+  const chatId = msg.chat.id;
+  const stateInfo = userStates[chatId];
+
+  if (stateInfo && stateInfo.state === states.WAITING_FOR_PAYMENT_CONFIRMATION) {
+    bot.forwardMessage(adminChatId, chatId, msg.message_id);
+    bot.sendMessage(chatId, "فیش واریز دریافت شد. لطفاً صبور باشید تا وضعیت پرداخت بررسی شود.");
+  }
+});
+
+// پردازش منوی تنظیمات برای مدیر
+bot.on('callback_query', (query) => {
+  const chatId = query.message.chat.id;
+  const data = query.data;
+
+  if (chatId === adminChatId) {
+    if (data === 'settings') {
+      showAdminSettingsMenu(chatId);
+    } else if (data === 'update_cost') {
+      showUpdateCostMenu(chatId);
+    } else if (data === 'update_hours') {
+      showUpdateHoursMenu(chatId);
+    } else if (data === 'back_to_main') {
+      showMainMenu(chatId);
+    }
+  }
+});
+
+// راه‌اندازی وب‌سرور
+app.listen(process.env.PORT, () => {
+  console.log(`Server is running on port ${process.env.PORT}`);
 });
