@@ -23,7 +23,7 @@ const daysOfWeek = [
 
 // هزینه به ازای هر ساعت و نیم‌ساعت
 let hourlyRate = 500000;
-let halfHourlyRate = 250000;
+let halfHourlyRate = 250000; // این مقدار دیگر استفاده نمی‌شود
 
 // مبلغ بیعانه
 const depositAmount = 500000;
@@ -156,8 +156,7 @@ bot.on('message', (msg) => {
         return;
       }
       hourlyRate = newHourlyRate;
-      halfHourlyRate = hourlyRate / 2;
-      bot.sendMessage(chatId, `هزینه‌ها با موفقیت بروزرسانی شد.\n\nهزینه جدید به ازای هر ساعت: ${hourlyRate} تومان\nهزینه به ازای هر نیم‌ساعت: ${halfHourlyRate} تومان`);
+      bot.sendMessage(chatId, `هزینه‌ها با موفقیت بروزرسانی شد.\n\nهزینه جدید به ازای هر ساعت: ${hourlyRate} تومان`);
       delete adminStates[chatId];
       showAdminSettingsMenu(chatId);
     } else if (adminState.state === states.UPDATE_HOURS) {
@@ -353,20 +352,22 @@ const calculateTotalPrice = (startTime, endTime) => {
   // محاسبه مدت زمان استفاده به دقیقه
   const durationMinutes = endMinutes - startMinutes;
 
-  // محاسبه هزینه
+  // هزینه ساعت اول و هزینه برای دقایق اضافی
+  const hourlyRate = 500000; // هزینه برای ساعت اول
+  const additionalMinuteRate = 8333; // هزینه به ازای هر دقیقه اضافی
+
   let totalPrice = 0;
 
-  if (durationMinutes <= 30) {
-    // هزینه برای 30 دقیقه یا کمتر
+  if (durationMinutes <= 60) {
+    // هزینه برای 60 دقیقه یا کمتر
     totalPrice = hourlyRate;
   } else {
     // هزینه برای ساعت اول
     totalPrice = hourlyRate;
 
-    // هزینه برای نیم‌ساعت‌های بعدی
-    const additionalMinutes = durationMinutes - 30;
-    const additionalHalfHours = Math.ceil(additionalMinutes / 30);
-    totalPrice += additionalHalfHours * halfHourlyRate;
+    // هزینه برای دقایق اضافی
+    const additionalMinutes = durationMinutes - 60;
+    totalPrice += additionalMinutes * additionalMinuteRate;
   }
 
   return totalPrice;
@@ -375,4 +376,3 @@ const calculateTotalPrice = (startTime, endTime) => {
 app.listen(process.env.PORT || 3000, () => {
   console.log('Server is running...');
 });
-
