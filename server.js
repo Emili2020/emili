@@ -1,67 +1,66 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const TelegramBot = require('node-telegram-bot-api');
 const moment = require('moment');
-require('moment-jalaali');
+require('moment/locale/fa');
+const TelegramBot = require('node-telegram-bot-api');
+const axios = require('axios');
 
+// تنظیمات اولیه
+const token = '7249407729:AAFndN29H5rXdzTcz2Bab8RKsFLm39cDkeE';
+const bot = new TelegramBot(token, { polling: true });
 const app = express();
 app.use(bodyParser.json());
 
-// توکن تلگرام خود را اینجا وارد کنید
-const token = '7249407729:AAFndN29H5rXdzTcz2Bab8RKsFLm39cDkeE';
-
-// URL عمومی پروژه Glitch خود را اینجا وارد کنید
-const url = 'https://juniper-bitter-freon.glitch.me';
-
-// تنظیم و حذف Webhook
-const bot = new TelegramBot(token);
-bot.deleteWebHook().then(() => {
-  bot.setWebHook(`${url}/bot${token}`);
+app.post('/' + token, (req, res) => {
+    bot.processUpdate(req.body);
+    res.sendStatus(200);
 });
 
-// پردازش درخواست‌های POST از تلگرام
-app.post(`/bot${token}`, (req, res) => {
-  bot.processUpdate(req.body);
-  res.sendStatus(200);
-});
+// پیاده‌سازی ول هوک
+const webhookUrl = 'https://juniper-bitter-freon.glitch.me/' + token;
+bot.setWebHook(webhookUrl);
 
-// پیام خوش‌آمدگویی و دریافت پاسخ‌ها
+// وضعیت ربات و ذخیره‌سازی اطلاعات
+let userData = {};
+
+// پیام خوش‌آمدگویی و پرسش نام
 bot.onText(/\/start/, (msg) => {
-  const chatId = msg.chat.id;
-  bot.sendMessage(chatId, "خوش آمدید! لطفاً ساعات کاری خود را وارد کنید.");
+    const chatId = msg.chat.id;
+    bot.sendMessage(chatId, "خوش آمدید! لطفا نام خود را وارد کنید:");
+    userData[chatId] = { step: 'name' };
 });
 
+// دریافت نام و پرسش شماره تلفن
 bot.on('message', (msg) => {
-  const chatId = msg.chat.id;
+    const chatId = msg.chat.id;
+    const text = msg.text;
 
-  // بررسی اینکه آیا پیام کاربر یک دستور نبوده است
-  if (msg.text && !msg.text.startsWith('/')) {
-    // فرض کنید پیام کاربر ساعات کاری است
-    const userInput = msg.text.trim().split(',');
+    if (userData[chatId]) {
+        if (userData[chatId].step === 'name') {
+            userData[chatId].name = text;
+            userData[chatId].step = 'phone';
+            bot.sendMessage(chatId, "لطفا شماره تلفن خود را وارد کنید:");
+        } else if (userData[chatId].step === 'phone') {
+            userData[chatId].phone = text;
+            userData[chatId].step = 'payment';
+            bot.sendMessage(chatId, "لطفا اطلاعات پرداخت خود را وارد کنید:");
+        } else if (userData[chatId].step === 'payment') {
+            userData[chatId].payment = text;
 
-    if (userInput.length === 2) {
-      const [days, hours] = userInput;
+            // نمایش روزها و تاریخ شمسی به صورت ردیفی
+            const daysOfWeek = ['شنبه', 'یک‌شنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه'];
+            const dateInfo = daysOfWeek.map((day, index) => {
+                const date = moment().day(index + 1).locale('fa').format('YYYY/MM/DD');
+                return `${day}: ${date}`;
+            }).join('\n');
 
-      const startDate = moment();
-      const endDate = moment().add(6, 'days');
-
-      let response = 'ساعات کاری شما در روزهای هفته:\n\n';
-
-      for (let i = 0; i < 7; i++) {
-        const currentDay = moment(startDate).add(i, 'days');
-        const jalaaliDate = currentDay.format('jYYYY/jM/jD'); // تاریخ شمسی
-
-        response += `${days} ${jalaaliDate}: ${hours}\n`;
-      }
-
-      bot.sendMessage(chatId, response);
-    } else {
-      bot.sendMessage(chatId, 'لطفاً فرمت صحیح را وارد کنید: "روزها, ساعت‌ها"');
+            bot.sendMessage(chatId, `نام: ${userData[chatId].name}\nشماره تلفن: ${userData[chatId].phone}\nاطلاعات پرداخت: ${userData[chatId].payment}\n\nروزها و تاریخ‌های شمسی:\n${dateInfo}`);
+            delete userData[chatId];
+        }
     }
-  }
 });
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
 });

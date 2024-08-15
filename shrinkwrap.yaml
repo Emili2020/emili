@@ -1,8 +1,10 @@
 dependencies:
+  axios: 0.27.2
+  body-parser: 1.20.2
   express: 4.19.2
+  moment: 2.30.1
   moment-jalaali: 0.10.1
-  node-telegram-bot-api: 0.57.0
-  uuid: 8.3.2
+  node-telegram-bot-api: 0.56.0
 packages:
   /accepts/1.3.8:
     dependencies:
@@ -92,6 +94,13 @@ packages:
     dev: false
     resolution:
       integrity: sha512-u5w79Rd7SU4JaIlA/zFqG+gOiuq25q5VLyZ8E+ijJeILuTxVzZgp2CaGw/UTw6pXYN9XMO9yiqj/nEHmhTG5CA==
+  /axios/0.27.2:
+    dependencies:
+      follow-redirects: 1.15.6
+      form-data: 4.0.0
+    dev: false
+    resolution:
+      integrity: sha512-t+yRIyySRTp/wua5xEr+z1q60QmLq8ABsS5O9Me1AsE5dfKqgnCFzwiCZZ/cGNd1lq4/7akDWMxdhVlucjmnOQ==
   /balanced-match/1.0.2:
     dev: false
     resolution:
@@ -521,6 +530,12 @@ packages:
       node: '>= 0.8'
     resolution:
       integrity: sha512-5uXcUVftlQMFnWC9qu/svkWv3GTd2PfUhK/3PLkYNAe7FbqJMt3515HaxE6eRL74GdsriiwujiawdaB1BpEISg==
+  /follow-redirects/1.15.6:
+    dev: false
+    engines:
+      node: '>=4.0'
+    resolution:
+      integrity: sha512-wWN62YITEaOpSK584EZXJafH1AGpO8RVgElfkuXbTOrPX4fIfOyEpW/CsiNd8JdYrAoOvafRTOEnvsO++qCqFA==
   /for-each/0.3.3:
     dependencies:
       is-callable: 1.2.7
@@ -541,6 +556,16 @@ packages:
       node: '>= 0.12'
     resolution:
       integrity: sha512-1lLKB2Mu3aGP1Q/2eCOx0fNbRMe7XdwktwOruhfqqd0rIJWwN4Dh+E3hrPSlDCXnSR7UtZ1N38rVXm+6+MEhJQ==
+  /form-data/4.0.0:
+    dependencies:
+      asynckit: 0.4.0
+      combined-stream: 1.0.8
+      mime-types: 2.1.35
+    dev: false
+    engines:
+      node: '>= 6'
+    resolution:
+      integrity: sha512-ETEklSGi5t0QMZuiXoA/Q6vcnxcLQP5vdugSpuAyi6SVGi2clPPp+xgEhuMaHC+zGgn31Kd235W35f7Hykkaww==
   /forwarded/0.2.0:
     dev: false
     engines:
@@ -978,7 +1003,7 @@ packages:
       node: '>= 0.6'
     resolution:
       integrity: sha512-+EUsqGPLsM+j/zdChZjsnX51g4XrHFOIXwfnCVPGlQk/k5giakcKsuxCObBRu6DSm9opw/O6slWbJdghQM4bBg==
-  /node-telegram-bot-api/0.57.0:
+  /node-telegram-bot-api/0.56.0:
     dependencies:
       array.prototype.findindex: 2.2.3
       bl: 1.2.3
@@ -995,7 +1020,7 @@ packages:
     engines:
       node: '>=0.12'
     resolution:
-      integrity: sha512-joLDEfPBB9BYi9ClB7X1+YGhlu5m/wB4YtM80jzHsFVtmfJn93bwpJsdh7DcA4lEVaxw7TsnIT0tux3ZLmk3vw==
+      integrity: sha512-gKUlH/uUXdSJ++6y1Y16qEThZouecfl4twuPKe6V2BPFDDfom9j2QMlxfslPEjZPH2ZXlA1S/uoRCKtIjzuaLw==
   /oauth-sign/0.9.0:
     dev: false
     resolution:
@@ -1497,11 +1522,6 @@ packages:
     hasBin: true
     resolution:
       integrity: sha512-HjSDRw6gZE5JMggctHBcjVak08+KEVhSIiDzFnT9S9aegmp85S/bReBVTb4QTFaRNptJ9kuYaNhnbNEOkbKb/A==
-  /uuid/8.3.2:
-    dev: false
-    hasBin: true
-    resolution:
-      integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==
   /vary/1.1.2:
     dev: false
     engines:
@@ -1548,7 +1568,9 @@ registry: 'https://registry.npmjs.org/'
 shrinkwrapMinorVersion: 9
 shrinkwrapVersion: 3
 specifiers:
-  express: ^4.17.1
+  axios: ^0.27.2
+  body-parser: ^1.20.0
+  express: ^4.18.2
+  moment: ^2.29.1
   moment-jalaali: ^0.10.1
-  node-telegram-bot-api: ^0.57.0
-  uuid: ^8.3.2
+  node-telegram-bot-api: ^0.56.0
